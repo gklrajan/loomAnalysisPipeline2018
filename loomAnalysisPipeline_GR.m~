@@ -63,17 +63,6 @@ h        = fopen([PathName, FileName]);
 tmp_data = fread(h, inf, 'float');
 fclose(h);
 
-%key stim
-% frameCount
-% loom R
-% stim timer
-% 6 adtl variables
-
-% Read and reorganize the stim file
-lam        = fopen([stimPathName, StimName]);
-stm_data = fread(lam, inf, 'float');
-fclose(lam);
-
 tmp_data = tmp_data(1:(end-mod(size(tmp_data,1), num_data_categories)), 1); % cuts when parts of the data categories are missing at the end
 tmp_data = reshape(tmp_data, [num_data_categories, size(tmp_data, 1)/num_data_categories])';
 
@@ -214,7 +203,7 @@ tmp_data(:,1) = tmp_data(:,1) - tmp_data(1,1) + 1; % framecounter starts at 1
 % writeVideo(vidObj,f);
 % close(vidObj);
 
-%%
+%% -- L
 %-------------------------------------------------------------------------------------
 %
 % IDENTIFICATION OF SWIM BOUTS (bout speeds, IBIs etc)
