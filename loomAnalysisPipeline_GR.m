@@ -53,10 +53,15 @@ acquis_date = tmp_str{1, 1}; acquis_time = tmp_str{1, 2}; exp_type    = tmp_str{
 
 % acquisition parameters
 window_size         = 0;
-num_data_categories = 6+window_size^2; %6 for swim /6+5 for loom
+num_data_categories = 7+window_size^2; %6 for swim /6+5 for loom/7 for tap 
 camscale_px_per_mm  = 20.2; % px/mm changed on 180926 from 20.6
 datarate_Hz         = 750;  % Hertz
-NumVar = 6; %6 for swim /6+5 for loom
+NumVar = 7; %6 for swim /6+5 for loom / 7 for tap 
+
+%% to do: get the timestamps of stim onset (and also grab the corresp R)
+
+
+%%
 
 % Read and reorganize the bin file
 h        = fopen([PathName, FileName]);
@@ -162,24 +167,24 @@ fprintf('\n\ntiming flawed (outside of lost frames):  %d  \n', ~isTime  );
 % tmp_data(idx_edge,2:end) = nan;
 
 %%
-% % INSERT nans for lost frames...
+% % INSERT nans for lost frames... 
 % 
 % % define anonymous function that inserts (nxm) blocks into (oxm) matrices
-insert_blocks = @(insert_block, matrix, n) cat(1,  matrix(1:n-1,:), insert_block, matrix(n:end,:) );
-
-data_raw = tmp_data;
-
-for ii = nnz(idx_frame):-1:1 % starts from the last row in the matrix to keep the indizes for block-insertion
- 
-    nan_block       = nan(frame_diff(idx_lost(ii)) - 1, num_data_categories);
-    nan_block(:, 1) = tmp_data(idx_lost(ii)-1, 1)+1: tmp_data(idx_lost(ii)-1, 1) + frame_diff(idx_lost(ii))-1; % fill the first column of the Nan blocks with frame numbers that were missing
-    
-    tmp_data        = insert_blocks(nan_block, tmp_data, idx_lost(ii));
-    
-end
-
-tmp_data(:,1) = tmp_data(:,1) - tmp_data(1,1) + 1; % framecounter starts at 1
-
+% insert_blocks = @(insert_block, matrix, n) cat(1,  matrix(1:n-1,:), insert_block, matrix(n:end,:) );
+% 
+% data_raw = tmp_data;
+% 
+% for ii = nnz(idx_frame):-1:1 % starts from the last row in the matrix to keep the indizes for block-insertion
+%  
+%     nan_block       = nan(frame_diff(idx_lost(ii)) - 1, num_data_categories);
+%     nan_block(:, 1) = tmp_data(idx_lost(ii)-1, 1)+1: tmp_data(idx_lost(ii)-1, 1) + frame_diff(idx_lost(ii))-1; % fill the first column of the Nan blocks with frame numbers that were missing
+%     
+%     tmp_data        = insert_blocks(nan_block, tmp_data, idx_lost(ii));
+%     
+% end
+% 
+% tmp_data(:,1) = tmp_data(:,1) - tmp_data(1,1) + 1; % framecounter starts at 1
+% 
 
 % % read the fish images
 % 
@@ -236,6 +241,8 @@ view([0 90 0]);
 xlabel('x-position');
 ylabel('y-position');
 zlabel('frames');
+
+plot(xpos,ypos);
 
 dxV   = [0; diff(xpos)]; % distance between two consecutive x-coordinates
 dy   = [0; diff(ypos)]; % distance between two consecutive y-coordinates
@@ -347,7 +354,7 @@ plot(tmp_vel_fB);
 hold off;
 
 %% new - 20180829 - to ID tap idx and look for peaks in those regions.
-
+% this was not used in the end to compute stim-related events
 % id the tap signals
 idx_tap=find(tmp_data(:,7)==1);
 
@@ -366,16 +373,15 @@ end
 %% find peaks in the velocity
 [pks,locsz] = findpeaks(tmp_vel_fB,'MinPeakProminence',6,'MinPeakDistance',100); %minPeakProminence & minPeakDist as bout interval and min Velo resp
 
-
 %% new - 20180829 - verify if locs are associated with taps and operate acc
 
 % create a draft RT matrix - (all taps - all escapes in tmp_difftap)
 for kkhh=1:length(idx_tap)
-tmp_diffTap(:,kkhh)=idx_tap(kkhh)-locsz;
+tmp_diffTap(:,kkhh)=idx_tap(kkhh)-locsz; 
 end
 
 % now filter out the matrix to retain only the best (as described below) escape 
-% velocity associated with each tap in idx_realEscape
+% velocity associated with each tap in idx_realEscape (Pn)
 
 klm=1;
 for sss=1:size(tmp_diffTap,2)
@@ -385,7 +391,7 @@ for sss=1:size(tmp_diffTap,2)
             klm=klm+1;
         end
     end
-    idx_realEscape(klm)=inf;
+    idx_realEscape(klm)=inf; %inf after every column and use this info to find non-resp fish
     klm=klm+1;
 end
 
@@ -426,21 +432,22 @@ fast_locs=locsz(idx_corrTap2);
 %     end
 % end
 
-
+%% to-do: find all the bouts and then use the above escape bout info to extract our escape-related kinematics
+% done on 5th oct 2018
 %%
 
-if fast_locs>=1
+if locsz>=1
     
-for qq = 1:size(fast_locs)
+for qq = 1:size(locsz)
     
-    if (fast_locs(qq) - 3*loomEscape(ff).boutAnalysis.boutLength <=0)... % get rid of any half bout in the begining
-                ||(fast_locs(qq) + 3*loomEscape(ff).boutAnalysis.boutLength >=size(tmp_vel_fB,1))... % half bout in the end
-                ||(any(isnan(fast_locs(qq):fast_locs(qq)+3*loomEscape(ff).boutAnalysis.boutLength)))... % remove nan-area
-                ||(any(isnan(fast_locs(qq):fast_locs(qq)-3*loomEscape(ff).boutAnalysis.boutLength)))... % nan-area again
-                ||tmp_vel_fB(fast_locs(qq))<= loomEscape(ff).boutAnalysis.VthreshON... %check w/ Vthresh
-                ||tmp_vel_fB(fast_locs(qq))<= loomEscape(ff).boutAnalysis.BthreshOFF %check w/ Bthresh
+    if (locsz(qq) - 3*loomEscape(ff).boutAnalysis.boutLength <=0)... % get rid of any half bout in the begining
+                ||(locsz(qq) + 3*loomEscape(ff).boutAnalysis.boutLength >=size(tmp_vel_fB,1))... % half bout in the end
+                ||(any(isnan(locsz(qq):locsz(qq)+3*loomEscape(ff).boutAnalysis.boutLength)))... % remove nan-area
+                ||(any(isnan(locsz(qq):locsz(qq)-3*loomEscape(ff).boutAnalysis.boutLength)))... % nan-area again
+                ||tmp_vel_fB(locsz(qq))<= loomEscape(ff).boutAnalysis.VthreshON... %check w/ Vthresh
+                ||tmp_vel_fB(locsz(qq))<= loomEscape(ff).boutAnalysis.BthreshOFF %check w/ Bthresh
             
-            fast_locs(qq)= NaN;
+            locsz(qq)= NaN;
     end
 end
 
@@ -464,30 +471,30 @@ end
 
 %13 inter-bout-interval in ms
 
-fast_locs(isnan(fast_locs)) = []; %imp - esle, error w/ for loop - sunbscript indices must be real integers or logicals
+locsz(isnan(locsz)) = []; %imp - esle, error w/ for loop - sunbscript indices must be real integers or logicals
 
-tmp_swim_bouts = zeros(size(fast_locs,1),15);
+tmp_swim_bouts = zeros(size(locsz,1),15);
 
-for mm = 1:size(fast_locs,1)
+for mm = 1:size(locsz,1)
    
     %find start frame
     sss = 0;
-    while fast_locs(mm)-sss>=2*loomEscape(ff).boutAnalysis.boutLength...
-            && tmp_vel_fV(fast_locs(mm)-sss) >= loomEscape(ff).boutAnalysis.VthreshON % using narrow filter for onset
+    while locsz(mm)-sss>=2*loomEscape(ff).boutAnalysis.boutLength...
+            && tmp_vel_fV(locsz(mm)-sss) >= loomEscape(ff).boutAnalysis.VthreshON % using narrow filter for onset
         sss = sss + 1;
     end   
     
-    tmp_swim_bouts(mm,1) = fast_locs(mm)-sss+1; %bout start frame
+    tmp_swim_bouts(mm,1) = locsz(mm)-sss+1; %bout start frame
     
     
     %find end frame
     eee = 0;
-    while fast_locs(mm)<=size(tmp_vel_fB,1)...
-            && tmp_vel_fB(fast_locs(mm)+eee) >= loomEscape(ff).boutAnalysis.BthreshOFF % using broad filter for offset
+    while locsz(mm)<=size(tmp_vel_fB,1)...
+            && tmp_vel_fB(locsz(mm)+eee) >= loomEscape(ff).boutAnalysis.BthreshOFF % using broad filter for offset
         eee = eee + 1;
     end
     
-    tmp_swim_bouts(mm,2) = fast_locs(mm)+eee-1; %bout end frame
+    tmp_swim_bouts(mm,2) = locsz(mm)+eee-1; %bout end frame
     
     %bout duration in ms
     tmp_swim_bouts(mm,3) = (tmp_swim_bouts(mm,2) - tmp_swim_bouts(mm,1))*frame_length_calc_ms;
@@ -523,7 +530,7 @@ for mm = 1:size(fast_locs,1)
     tmp_swim_bouts(mm,10)= nansum(yaws(yaws>0)); %summation of total left yaws
     tmp_swim_bouts(mm,11)= nansum(yaws(yaws<0)); %summation of total right yaws
     
-    %angular velocity
+    %avg angular velocity
     tmp_swim_bouts(mm,12) = nansum(abs(yaws))/tmp_swim_bouts(mm,3); %deg/sec
     
     %tail half bends
@@ -537,19 +544,37 @@ for mm = 1:size(fast_locs,1)
     %delay - corrected 19th May 2018 - take Vp as the point to calculate
     %delay not bout start; to take care of cases where the animal was
     %already engaged in a bout when the tap was triggered
-    tmp_swim_bouts(mm,13) = (fast_locs(mm)-idx_tap(mm))*frame_length_calc_ms; %if there is an error --> error in tap/escape ID
+    tmp_swim_bouts(mm,13) = (locsz(mm)-idx_tap(mm))*frame_length_calc_ms; %if there is an error --> error in tap/escape ID
 
-     %peak angular velocity (avg of 10 ms window around the peak velocity)
-     tmp_swim_bouts(mm,17) = nansum(abs(tmp_ang_vel(fast_locs(mm)-1:fast_locs(mm)+1)))/3; %in deg/sec already
+     %peak angular velocity
+     tmp_swim_bouts(mm,17) = nansum(abs(tmp_ang_vel(locsz(mm,1):locsz(mm,2))))/((locsz(mm,2)-locsz(mm,1))*1.33)/1000; %in deg/sec already
      
-     tmp_swim_bouts(mm,18) = (nansum(islocalmax(tmp_delta_ori_filtered2((fast_locs(mm)-60:fast_locs(mm)+60)),'MinSeparation',2)))/(160/1000);
-     %TBF associated with 160ms peak window - 2/3 of Zf bout length (240ms)
+     tmp_swim_bouts(mm,18) = (nansum(islocalmax(tmp_delta_ori_filtered2((locsz(mm,2):locsz(mm,1))),'MinSeparation',2)))/((locsz(mm,2)-locsz(mm,1))*1.33)/1000;
+     %TBF associated
      
-    %rxn time
-    tmp_swim_bouts(mm,19)=min(abs(idx_escape(mm)-idx_tap));
+    %rxn time - to-do after stim onset is extracted
+    
+    %tmp_swim_bouts(mm,19)=min(abs(idx_escape(mm)-idx_tap));
 end
 
- 
+%% grab the escape bouts here
+for cFast=1:length(fast_locs)
+    for  cBouts=1:size(tmp_swim_bouts,1)
+    escapeTest=sum((tmp_swim_bouts(cBouts,1):tmp_swim_bouts(cBouts,2))==fast_locs(cFast));
+    if escapeTest==1
+        tmp_escape_ID(cFast)=cBouts; % store the bout which corresponds to an escape
+    end
+    
+    end
+end
+
+for zzs=1:length(tmp_escape_ID)
+tmp_escape_bouts(zzs)=tmp_swim_bouts(tmp_escape_ID(zzs));
+end
+
+
+%% - commented out since IBI is not imp for stim-induced escape analysis
+
 % %% IBI section
 % tmp_vel_IBI_fV = tmp_vel_fV;
 % 
@@ -596,6 +621,9 @@ end
 freeSwim.tmp_swim_bouts=tmp_swim_bouts;
 end
 
+%% responsiveness index per fish based on 
+
+
 %% some plots
 fig1 = figure;
 hold on; 
@@ -616,7 +644,7 @@ plot(tmp_vel_fF,'LineWidth', 3);
 vline(tmp_swim_bouts(:,1),'m');
 vline(tmp_swim_bouts(:,2),'m');
 vline(idx_tap+1880,'k');
-%vline(fast_locs,'c');
+%vline(locsz,'c');
 hold off;
 
 % fig2 = figure; histfit(tmp_swim_bouts(:,3),50);
@@ -657,3 +685,14 @@ hold on;
 vline(idx_tap);
 vline(idx_escape);
 hold off;
+
+
+%% added for loom
+function h = circle(x,y,r)
+hold on
+th = 0:pi/50:2*pi;
+xunit = r * cos(th) + x;
+yunit = r * sin(th) + y;
+h = plot(xunit, yunit);
+hold off
+end
