@@ -70,7 +70,7 @@ fclose(h);
 % 1) frameCount
 % 2) loom R
 % 3) stim timer
-% [6 adtl variables - these were removed 10/05/18 RJ]
+% [6 additional variables - these were removed 10/05/18 RJ]
 
 % Read and reorganize the stim file
 lam        = fopen([stimPathName, StimName]);
@@ -238,7 +238,7 @@ for cloom = 1:length(loomon)
             loomstart = loomon(cloom); %store loomon(cloom) as the first value in loomstart
         end
     elseif cloom>1
-        if (loomon(cloom)-loomon(cloom-1))>50 && loomwin(loomon(cloom))==200 %if there's a 50 frame stretch with no stim before this, and the stim is on for at least 200 frames after
+        if (loomon(cloom)-loomon(cloom-1))>150 && loomwin(loomon(cloom))==200 %if there's a 150 frame stretch with no stim before this, and the stim is on for at least 200 frames after
             loomstart = [loomstart; loomon(cloom)]; %store loomon(cloom) as the next value in loomstart
         end
     end
@@ -422,10 +422,13 @@ end
 
 klm=1;
 for sss=1:size(tmp_diffTap,2) %counter sss to go through the stimuli (columns)
-    for aaa=1:size(tmp_diffTap,1) %counter aaa to go through the escape bouts (rows)
-        if (tmp_diffTap(aaa,sss)<=0 && abs(tmp_diffTap(aaa,sss))==min(abs(tmp_diffTap(:,sss))) && abs(tmp_diffTap(aaa,sss))<=1500)
+    for aaa=1:size(tmp_diffTap,1) %counter aaa to go through the movement bouts (rows)
+        if (tmp_diffTap(aaa,sss)<=0 && abs(tmp_diffTap(aaa,sss))==min(abs(tmp_diffTap(:,sss))) && abs(tmp_diffTap(aaa,sss))<=1000)
             idx_realEscape(klm)=aaa;
             klm=klm+1;
+            % Select if: Stim initiates before the bout, bout is the
+            % closest high vel bout after stimulus, which initiates within
+            % *1000* ms of the stimulus initiation
         end
     end
     idx_realEscape(klm)=inf; %inf after every column and use this info to find non-resp fish
@@ -582,7 +585,8 @@ for mm = 1:size(locsz,1)
     
     if sum(locsz(mm)==idx_escape)>=1 % if locsz(mm) is one of the ID'd escapes
         nn=find(locsz(mm)==idx_escape);
-        tmp_swim_bouts(mm,13) = (locsz(mm)-idx_tap(nn))*frame_length_calc_ms; %if there is an error --> error in tap/escape ID
+        tmp_swim_bouts(mm,13) = (locsz(mm)-idx_tap(nn))*frame_length_calc_ms;
+        %if there is an error --> error in tap/escape ID, usually because the same bout is ID'd for multiple stimuli
     else
         tmp_swim_bouts(mm,13)=nan;
     end
@@ -615,7 +619,7 @@ for mm = 1:size(locsz,1)
 
     turnstart  = tmp_InflectIdx(find(tmp_InflectIdx <= tmp_MaxAngVelIdx, 1, 'last'));
     turnpeak = tmp_InflectIdx(find(tmp_InflectIdx >= tmp_MaxAngVelIdx, 1,'first'));
-    tmp_swim_bouts(mm,18) = abs(nansum(tmp_delta_ori_filtered2(turnstart:turnpeak)));
+    tmp_swim_bouts(mm,18) = abs(nansum(tmp_delta_ori_filtered2((tmp_swim_bouts(mm,1)+turnstart-1):(tmp_swim_bouts(mm,1)+turnpeak-1))));
 
     % Identify the directionality of the major orientation change of the bout
     if tmp_MaxAngVel == max(tmp_delta_ori_filtered2(tmp_swim_bouts(mm,1):tmp_swim_bouts(mm,2)));
@@ -629,16 +633,17 @@ for mm = 1:size(locsz,1)
 end
 
 %% grab the escape bouts here
+tmp_escape_ID=[];
 for cFast=1:length(escapeLocs)
     for  cBouts=1:size(tmp_swim_bouts,1)
     escapeTest=sum((tmp_swim_bouts(cBouts,1):tmp_swim_bouts(cBouts,2))==escapeLocs(cFast));
     if escapeTest==1
         tmp_escape_ID(cFast)=cBouts; % store the bout which corresponds to an escape
-
     end    
     end
 end
 
+tmp_escape_bouts=[];
 for zzs=1:length(tmp_escape_ID)
     if tmp_escape_ID(zzs)>0 % 10-17-18 there is a problem where 0's are being placed into the beginning
                             % of tmp_escape_ID, which is coming from cBouts
